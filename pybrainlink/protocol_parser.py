@@ -132,8 +132,8 @@ class BrainLinkProtocolParser:
     def _parse_gyro_packet(self) -> Optional[Tuple[int, int, int]]:
         """Parse gyro data packet from buffer"""
         idx = 0
-        while idx < len(self.buffer) - 9:  # Need at least 10 bytes for gyro packet
-            if (idx + 10 <= len(self.buffer) and
+        while idx < len(self.buffer) - 15:
+            if (idx + 10 < len(self.buffer) and
                 self.buffer[idx] == 0xAA and
                 self.buffer[idx+1] == 0xAA and
                 self.buffer[idx+2] == 0x07 and
@@ -146,12 +146,10 @@ class BrainLinkProtocolParser:
                     z = int.from_bytes(self.buffer[idx+8:idx+10], 'big', signed=True)
                     
                     if self.debug:
-                        print(f"✅ Gyro Data: X={x}, Y={y}, Z={z}")
+                        print(f"Gyro Data: X={x}, Y={y}, Z={z}")
                     
                     return (x, y, z)
-                except Exception as e:
-                    if self.debug:
-                        print(f"Error parsing gyro packet: {e}")
+                except:
                     pass
             
             idx += 1
