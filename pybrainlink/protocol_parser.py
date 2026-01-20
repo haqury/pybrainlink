@@ -1,7 +1,7 @@
 """Parser for BrainLink Bluetooth protocol"""
 
 from typing import Optional, Tuple
-from .models import BrainLinkModel
+from .models import BrainLinkModel, BrainLinkExtendModel
 
 
 class BrainLinkProtocolParser:
@@ -36,7 +36,7 @@ class BrainLinkProtocolParser:
         self.buffer = bytearray()
         self.debug = debug
     
-    def parse_data(self, data: bytearray) -> Tuple[Optional[BrainLinkModel], Optional[Tuple[int, int, int]]]:
+    def parse_data(self, data: bytearray) -> Tuple[Optional[BrainLinkModel], Optional[Tuple[int, int, int]], Optional[BrainLinkExtendModel]]:
         """
         Parse incoming data from BrainLink device
         
@@ -44,12 +44,13 @@ class BrainLinkProtocolParser:
             data: Raw bytes from device
             
         Returns:
-            Tuple of (EEG data, Gyro data) - either can be None if not found
+            Tuple of (EEG data, Gyro data, Extended data) - any can be None if not found
         """
         self.buffer.extend(data)
         
         eeg_data = None
         gyro_data = None
+        extend_data = None
         
         # Look for long EEG packets (type 0x2002)
         eeg_data = self._parse_eeg_packet()
@@ -57,11 +58,14 @@ class BrainLinkProtocolParser:
         # Look for gyro packets (type 0x0703)
         gyro_data = self._parse_gyro_packet()
         
+        # Look for extended packets (type 0xBB0C02)
+        extend_data = self._parse_extend_packet()
+        
         # Keep only recent data in buffer (last 2000 bytes)
         if len(self.buffer) > 2000:
             self.buffer = self.buffer[-2000:]
         
-        return eeg_data, gyro_data
+        return eeg_data, gyro_data, extend_data
     
     def _parse_eeg_packet(self) -> Optional[BrainLinkModel]:
         """Parse EEG data packet from buffer"""
@@ -108,7 +112,7 @@ class BrainLinkProtocolParser:
                         )
                         
                         if self.debug:
-                            print(f"\n✅ EEG Data Parsed:")
+                            print(f"\n[OK] EEG Data Parsed:")
                             print(f"   Attention: {attention}, Meditation: {meditation}")
                             print(f"   Delta: {delta}, Theta: {theta}")
                             print(f"   Low Alpha: {low_alpha}, High Alpha: {high_alpha}")
@@ -128,8 +132,8 @@ class BrainLinkProtocolParser:
     def _parse_gyro_packet(self) -> Optional[Tuple[int, int, int]]:
         """Parse gyro data packet from buffer"""
         idx = 0
-        while idx < len(self.buffer) - 15:
-            if (idx + 10 < len(self.buffer) and
+        while idx < len(self.buffer) - 9:  # Need at least 10 bytes for gyro packet
+            if (idx + 10 <= len(self.buffer) and
                 self.buffer[idx] == 0xAA and
                 self.buffer[idx+1] == 0xAA and
                 self.buffer[idx+2] == 0x07 and
@@ -145,8 +149,71 @@ class BrainLinkProtocolParser:
                         print(f"✅ Gyro Data: X={x}, Y={y}, Z={z}")
                     
                     return (x, y, z)
-                except:
+                except Exception as e:
+                    if self.debug:
+                        print(f"Error parsing gyro packet: {e}")
                     pass
+            
+            idx += 1
+        
+        return None
+    
+    def _parse_extend_packet(self) -> Optional[BrainLinkExtendModel]:
+        """Parse extended data packet from buffer (battery, temperature, heart rate)"""
+        idx = 0
+        while idx < len(self.buffer) - 20:
+            # Look for AAAA BB0C02 pattern
+            if (idx + 15 < len(self.buffer) and
+                self.buffer[idx] == 0xAA and
+                self.buffer[idx+1] == 0xAA and
+                self.buffer[idx+2] == 0xBB and
+                self.buffer[idx+3] == 0x0C and
+                self.buffer[idx+4] == 0x02):
+                
+                try:
+                    packet_start = idx + 5
+                    
+                    if packet_start + 10 <= len(self.buffer):
+                        data = self.buffer[packet_start:packet_start + 10]
+                        
+                        # Extract extended values
+                        # Byte 0: AP (signal quality)
+                        ap = data[0] if len(data) > 0 else 0
+                        
+                        # Bytes 1-2: Electric (battery) - big endian
+                        electric = int.from_bytes(data[1:3], 'big') if len(data) > 2 else 0
+                        
+                        # Bytes 3-5: Version string (3 bytes)
+                        version = f"{data[3]}.{data[4]}.{data[5]}" if len(data) > 5 else "0.0.0"
+                        
+                        # Bytes 6-7: Temperature - big endian, divide by 10
+                        temp_raw = int.from_bytes(data[6:8], 'big') if len(data) > 7 else 0
+                        temperature = temp_raw / 10.0
+                        
+                        # Byte 8: Heart rate
+                        heart_rate = data[8] if len(data) > 8 else 0
+                        
+                        model = BrainLinkExtendModel(
+                            ap=ap,
+                            electric=electric,
+                            version=version,
+                            temperature=temperature,
+                            heart_rate=heart_rate
+                        )
+                        
+                        if self.debug:
+                            print(f"\n[OK] Extended Data Parsed:")
+                            print(f"   AP: {ap}")
+                            print(f"   Electric (Battery): {electric}")
+                            print(f"   Version: {version}")
+                            print(f"   Temperature: {temperature}C")
+                            print(f"   Heart Rate: {heart_rate} bpm\n")
+                        
+                        return model
+                        
+                except Exception as e:
+                    if self.debug:
+                        print(f"Error parsing extended packet: {e}")
             
             idx += 1
         

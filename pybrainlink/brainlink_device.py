@@ -27,6 +27,7 @@ class BrainLinkDevice:
         
         # Callbacks
         self.on_eeg_data: Optional[Callable[[BrainLinkModel], None]] = None
+        self.on_extend_data: Optional[Callable] = None
         self.on_gyro_data: Optional[Callable[[int, int, int], None]] = None
         self.on_device_found: Optional[Callable[[str, str], None]] = None
         
@@ -130,12 +131,15 @@ class BrainLinkDevice:
             data: Raw data bytes
         """
         try:
-            # Parse data
-            eeg_data, gyro_data = self.parser.parse_data(data)
+            # Parse data (now returns 3 values)
+            eeg_data, gyro_data, extend_data = self.parser.parse_data(data)
             
             # Call callbacks
             if eeg_data and self.on_eeg_data:
                 self.on_eeg_data(eeg_data)
+            
+            if extend_data and self.on_extend_data:
+                self.on_extend_data(extend_data)
             
             if gyro_data and self.on_gyro_data:
                 x, y, z = gyro_data
