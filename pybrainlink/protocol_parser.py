@@ -146,7 +146,7 @@ class BrainLinkProtocolParser:
                     z = int.from_bytes(self.buffer[idx+8:idx+10], 'big', signed=True)
                     
                     if self.debug:
-                        print(f"Gyro Data: X={x}, Y={y}, Z={z}")
+                        print(f"✅ Gyro Data: X={x}, Y={y}, Z={z}")
                     
                     return (x, y, z)
                 except:
