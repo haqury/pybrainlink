@@ -81,6 +81,7 @@ if __name__ == "__main__":
 
 ```python
 from pybrainlink.models import BrainLinkModel
+from dataclasses import asdict
 import json
 
 # Создаем модель данных
@@ -91,8 +92,8 @@ eeg_data = BrainLinkModel(
     theta=15000
 )
 
-# Конвертируем в словарь
-data_dict = eeg_data.to_dict()
+# Конвертируем в словарь через dataclasses.asdict()
+data_dict = asdict(eeg_data)
 
 # Сохраняем в JSON
 with open('eeg_data.json', 'w') as f:
@@ -196,6 +197,7 @@ class BrainLinkProtocolParser:
 ```python
 import asyncio
 import json
+from dataclasses import asdict
 from datetime import datetime
 from pybrainlink import BrainLinkDevice
 
@@ -206,7 +208,7 @@ async def record_session():
     def on_eeg_data(data):
         record = {
             'timestamp': datetime.now().isoformat(),
-            'data': data.to_dict()
+            'data': asdict(data)  # Convert dataclass to dict
         }
         session_data.append(record)
         print(f"Записано {len(session_data)} записей")

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from pybrainlink import BrainLinkDevice
@@ -17,7 +18,7 @@ async def main():
         """Record each EEG reading"""
         record = {
             'timestamp': datetime.now().isoformat(),
-            'data': data.to_dict()
+            'data': asdict(data)  # Convert dataclass to dict
         }
         session_data.append(record)
         
